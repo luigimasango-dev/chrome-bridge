@@ -1,0 +1,14 @@
+{
+  "name": "chrome-bridge",
+  "version": "1.0.0",
+  "description": "MCP server + Chrome extension letting OpenCode/Claude Code drive Luigi's logged-in Chrome. Read-only by default.",
+  "private": true,
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.18.0"
+  }
+}
