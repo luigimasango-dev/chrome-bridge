@@ -1,14 +1,45 @@
 # Chrome Bridge — browser control for OpenCode & Claude Code
 
-Lets agents drive Luigi's **live, logged-in Chrome** — which is what makes
+MCP server plus extension letting agents drive your logged-in Chrome, including login-walled sites.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/luigimasango-dev/chrome-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/luigimasango-dev/chrome-bridge/actions/workflows/ci.yml)
+[![Node 24](https://img.shields.io/badge/node-24-green.svg)](https://nodejs.org/)
+
+![smoke test listing all nine tools](docs/demo.png)
+
+## Quick start
+
+Requires Node 24+. Tested 2026-09-11 from a fresh clone on Windows 11:
+
+```powershell
+git clone https://github.com/luigimasango-dev/chrome-bridge.git
+cd chrome-bridge
+npm ci
+node test/smoke.mjs
+```
+
+That launches the real server over stdio and asserts all nine tools —
+no Chrome needed. The live loop (extension driving real tabs) needs the
+one-time install below.
+
+## Install (one-time, human hands)
+
+1. **Chrome:** open `chrome://extensions`
+2. Turn on **Developer mode** (top-right)
+3. **Load unpacked** → select `C:\Dev\chrome-bridge\extension`
+4. Pin the extension if you like; the badge shows `ON` when the bridge is up.
+5. Keep at least one normal Chrome window open while agents need the browser.
+
+Lets agents drive your **live, logged-in Chrome** — which is what makes
 blocked sites readable: X/Twitter, LinkedIn, Reddit, and anything else that
-refuses WebFetch/scraping works because it runs in a real logged-in browser.
+refuses plain HTTP scraping works because it runs in a real logged-in
+browser.
 
-Built 2026-08-04. Claude Code already had browser control (Claude in Chrome);
-this closes the same gap for OpenCode, which previously had no browser tool at
-all (`custom-scraper` is plain HTTP and can't see behind a login).
+The MCP server is registered in the OpenCode config as `chrome-bridge`.
+Restart OpenCode to load it.
 
-## Architecture
+## How it works
 
 ```
 OpenCode / Claude Code
@@ -32,21 +63,9 @@ the extension loaded, and agents can read/navigate it.
 - **Write actions are gated.** `chrome_click_selector` and `chrome_type_into`
   return `BLOCKED:` unless `CHROME_BRIDGE_ALLOW_WRITE=true`. This matches the
   machine rule: write-capable tools stay out of unattended OpenCode runs.
-  opencode.jsonc explicitly sets it to `false`. Only enable it for an
-  interactive Claude session, deliberately.
+  Only enable it for an interactive session, deliberately.
 - **Loopback only.** Nothing here touches the network except the extension's
   connection to `ws://127.0.0.1:8765`.
-
-## Install (one-time, Luigi's hands)
-
-1. **Chrome:** open `chrome://extensions`
-2. Turn on **Developer mode** (top-right)
-3. **Load unpacked** → select `C:\Dev\chrome-bridge\extension`
-4. Pin the extension if you like; the badge shows `ON` when the bridge is up.
-5. Keep at least one normal Chrome window open while agents need the browser.
-
-The MCP server is already registered in `~/.config/opencode/opencode.jsonc`
-(`chrome-bridge`). Restart OpenCode to load it.
 
 ## Tools
 
@@ -75,8 +94,32 @@ Invoke-RestMethod http://127.0.0.1:8765/
 
 `connected: true` appears once the extension is loaded in a Chrome window.
 
+## Limitations
+
+- CI runs only the stdio smoke test. The live bridge check
+  (`test_ws_bridge.mjs`) needs the extension loaded in a real Chrome, so it
+  stays a local command. Known 2026-09-11 finding: with the extension
+  connected (`connected:true`), `list_tabs` over the WS bridge timed out
+  twice — tracked as an issue, cause still open.
+- Content scripts cannot run on `chrome://` pages; if the active tab is one
+  of those, tab actions may fail while `list_tabs` still works.
+
+## Development
+
+```powershell
+npm ci
+node test/smoke.mjs   # fast: tools/list over stdio, no Chrome needed
+node test_ws_bridge.mjs  # live: needs server running + extension in Chrome
+```
+
 ## Files
 
 - `extension/` — MV3 extension (manifest, background SW, content script, popup)
 - `server/bridge.js` — WS host + request routing + write gate
-- `server/server.js` — MCP stdio entrypoint (SDK 1.30, Zod schemas)
+- `server/server.js` — MCP stdio entrypoint
+- `test/smoke.mjs` — CI smoke test: `tools/list` over stdio
+- `test_ws_bridge.mjs` — live bridge check (local only)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
