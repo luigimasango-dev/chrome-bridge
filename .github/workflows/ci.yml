@@ -16,3 +16,5 @@ jobs:
         run: npm ci
       - name: Smoke test (tools/list over stdio, no Chrome needed)
         run: node test/smoke.mjs
+      - name: WS routing regression (fake extension, no Chrome needed)
+        run: node test/ws_routing.mjs
