@@ -1,4 +1,4 @@
-// Chrome Bridge service worker (MV3).
+﻿// Chrome Bridge service worker (MV3).
 // Connects OUT to the local WebSocket server hosted by the Chrome Bridge MCP
 // server (server/server.js). The extension cannot listen on a port, so the MCP
 // server owns the socket and the extension dials it.
@@ -225,18 +225,91 @@ async function handleMessage(raw) {
         if (!code) return respond({ ok: false, error: "exec_js requires params.code" });
         const tab = await getActiveTab();
         if (!tab) return respond({ ok: false, error: "No active tab found." });
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: (src) => {
-            // eslint-disable-next-line no-new-func
-            const fn = new Function("return (" + src + ");");
-            const out = fn();
-            return out === undefined ? null : (typeof out === "object" ? JSON.stringify(out) : String(out));
-          },
-          args: [code],
-        });
-        respond({ ok: true, result: results[0] ? results[0].result : null });
-        break;
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (src) => {
+              try {
+                const fn = new Function("return (" + src + ");");
+                const out = fn();
+                if (out === undefined) return "undefined";
+                return typeof out === "object" ? JSON.stringify(out) : String(out);
+              } catch (e) {
+                return "JS_ERROR: " + (e && e.message ? e.message : String(e));
+              }
+            },
+            args: [code],
+          });
+          const first = Array.isArray(results) ? results[0] : null;
+          if (!first) return respond({ ok: true, result: "NO_FRAME_RESULT" });
+          if (first.error) return respond({ ok: false, error: "frame error: " + JSON.stringify(first.error) });
+          return respond({ ok: true, result: first.result === undefined ? "UNDEFINED_RESULT" : first.result });
+        } catch (e) {
+          return respond({ ok: false, error: "executeScript threw: " + (e && e.message ? e.message : String(e)) });
+        }
+      }
+
+      case "query": {
+        const sel = msg.params && msg.params.selector;
+        if (!sel) return respond({ ok: false, error: "query requires params.selector" });
+        const tab = await getActiveTab();
+        if (!tab) return respond({ ok: false, error: "No active tab found." });
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (s, lim) => {
+              const out = [];
+              const els = document.querySelectorAll(s);
+              for (let i = 0; i < els.length && i < lim; i++) {
+                const e = els[i];
+                out.push({
+                  index: i,
+                  tag: e.tagName,
+                  type: e.getAttribute("type") || "",
+                  id: e.id || "",
+                  cls: (e.className || "").toString().slice(0, 80),
+                  href: e.getAttribute("href") || "",
+                  name: e.getAttribute("name") || "",
+                  ph: e.getAttribute("placeholder") || "",
+                  text: (e.innerText || e.value || "").trim().slice(0, 90),
+                });
+              }
+              return { count: els.length, items: out };
+            },
+            args: [sel, (msg.params && msg.params.limit) || 25],
+          });
+          const first = Array.isArray(results) ? results[0] : null;
+          return respond({ ok: true, result: first ? first.result : null });
+        } catch (e) {
+          return respond({ ok: false, error: "query threw: " + (e && e.message ? e.message : String(e)) });
+        }
+      }
+
+      case "click_text": {
+        const want = ((msg.params && msg.params.text) || "").trim().toLowerCase();
+        if (!want) return respond({ ok: false, error: "click_text requires params.text" });
+        const tab = await getActiveTab();
+        if (!tab) return respond({ ok: false, error: "No active tab found." });
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (needle, tagFilter) => {
+              const nodes = [...document.querySelectorAll(tagFilter || "a,button,[role=button],input[type=submit]")];
+              const hit = nodes.find((e) => {
+                const t = (e.innerText || e.value || "").trim().toLowerCase();
+                return t && t.includes(needle);
+              });
+              if (!hit) return { clicked: false, reason: "no element matched", candidates: nodes.slice(0, 15).map((e) => (e.innerText || e.value || "").trim().slice(0, 60)) };
+              hit.click();
+              return { clicked: true, matched: (hit.innerText || hit.value || "").trim().slice(0, 80) };
+            },
+            args: [want, (msg.params && msg.params.tag) || ""],
+          });
+          const first = Array.isArray(results) ? results[0] : null;
+          return respond({ ok: true, result: first ? first.result : null });
+        } catch (e) {
+          return respond({ ok: false, error: "click_text threw: " + (e && e.message ? e.message : String(e)) });
+        }
       }
 
       case "ping": {
@@ -262,7 +335,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 // Stay alive: MV3 service workers idle out after 30s. Reconnect on startup.
 chrome.runtime.onStartup.addListener(connect);
 chrome.runtime.onInstalled.addListener(() => {
-  setBadge(false, "…");
+  setBadge(false, "â€¦");
   connect();
 });
 
@@ -287,4 +360,4 @@ chrome.tabs.onUpdated.addListener(() => {
   if (ws && ws.readyState === WebSocket.OPEN) sendStatus();
 });
 connect();
-setBadge(false, "…");
+setBadge(false, "â€¦");
