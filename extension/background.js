@@ -1,4 +1,4 @@
-﻿// Chrome Bridge service worker (MV3).
+// Chrome Bridge service worker (MV3).
 // Connects OUT to the local WebSocket server hosted by the Chrome Bridge MCP
 // server (server/server.js). The extension cannot listen on a port, so the MCP
 // server owns the socket and the extension dials it.
@@ -335,7 +335,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 // Stay alive: MV3 service workers idle out after 30s. Reconnect on startup.
 chrome.runtime.onStartup.addListener(connect);
 chrome.runtime.onInstalled.addListener(() => {
-  setBadge(false, "â€¦");
+  setBadge(false, "…");
   connect();
 });
 
@@ -360,4 +360,4 @@ chrome.tabs.onUpdated.addListener(() => {
   if (ws && ws.readyState === WebSocket.OPEN) sendStatus();
 });
 connect();
-setBadge(false, "â€¦");
+setBadge(false, "…");
